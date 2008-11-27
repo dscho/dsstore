@@ -11,10 +11,11 @@ print Dumper([ $foo, unpack('NNN', $foo->{unk2}) ]);
 $treeheader = $foo->blockByNumber($foo->{toc}->{DSDB});
 
 #print Dumper([ $treeheader->read(20, 'N5') ]);
-print Dumper([ &readBTreeNode($foo->blockByNumber($treeheader->read(4, 'N'))) ]);
+#print Dumper([ &readBTreeNode($foo->blockByNumber($treeheader->read(4, 'N'))) ]);
 
 #print Dumper([ &readBTreeNode($foo->blockByNumber( 2 )) ]);
 
+$foo->listblocks();
 
 
 sub readBTreeNode {
@@ -92,23 +93,29 @@ package BuddyAllocator;
 sub open {
     my($fh) = @_;
 
-    my($unk1, $magic, $offset, $size, $offset2, $unk2) = &main::readBytes($fh, 0x20, 'N a4 NNN a12');
-    die 'bad magic' unless $magic eq 'Bud1';
+    # read the file header: 32 bytes, plus a mysterious extra
+    # four bytes at the front
+    my($magic1, $magic, $offset, $size, $offset2, $unk2) = &main::readBytes($fh, 0x24, 'N a4 NNN a16');
+    die 'bad magic' unless $magic eq 'Bud1' and $magic1 == 1;
     die 'inconsistency: two root addresses are different'
 	unless $offset == $offset2;
 
     my($self) = {
 	fh => $fh,
-	unk1 => $unk1,
 	unk2 => $unk2,
 	fudge => 4,  # add this to offsets for some unknown reason
     };
     bless($self, 'BuddyAllocator');
     
+    # retrieve the root/index block which contains the allocator's
+    # book-keeping data
     my ($rootblock) = $self->getblock($offset, $size);
 
+    # parse out the offsets of all the allocated blocks
+    # these are in tagged offset format (27 bits offset, 5 bits size)
     my($offsetcount, $unk3) = $rootblock->read(8, 'NN');
     print "c0 $offsetcount c1 $unk3\n";
+    $self->{'unk3'} = $unk3;
     # For some reason, offsets are always stored in blocks of 256.
     my(@offsets);
     while($offsetcount > 0) {
@@ -118,6 +125,7 @@ sub open {
     # 0 indicates an empty slot; don't need to keep those around
     while($offsets[$#offsets] == 0) { pop(@offsets); }
 
+    # Next, read N key/value pairs
     my($toccount) = $rootblock->read(4, 'N');
     my($toc) = {
     };
@@ -131,7 +139,59 @@ sub open {
     $self->{'offsets'} = \@offsets;
     $self->{'toc'} = $toc;
 
+    # Finally, read the free lists.
+    my($freelists) = { };
+    for(my $width = 0; $width < 32; $width ++) {
+	my($blkcount) = $rootblock->read(4, 'N');
+	$freelists->{$width} = [ $rootblock->read(4 * $blkcount, 'N*') ];
+    }
+    $self->{'freelist'} = $freelists;
+
     return $self;
+}
+
+# List all the blocks in order and see if there are any gaps or overlaps.
+sub listblocks {
+    my($self) = @_;
+    my(%byaddr);
+    my($addr, $len);
+
+    # We store all blocks (allocated and free) in %byaddr,
+    # then go through its keys in order
+
+    # Store the implicit 32-byte block that holds the file header
+    push(@{$byaddr{0}}, "5 (file header)");
+
+    # Store all the numbered/allocated blocks from @offsets
+    for my $blnum (0 .. $#{$self->{'offsets'}}) {
+	$addr_size = $self->{'offsets'}->[$blnum];
+	$addr = $addr_size & ~0x1F;
+	$len = $addr_size & 0x1F;
+	push(@{$byaddr{$addr}}, "$len (blkid $blnum)");
+    }
+
+    # Store all the blocks in the freelist(s)
+    for $len (keys %{$self->{'freelist'}}) {
+	for $addr (@{$self->{'freelist'}->{$len}}) {
+	    push(@{$byaddr{$addr}}, "$len (free)");
+	}
+    }
+
+    # Loop through the blocks in order of address
+    my(@addrs) = sort {$a <=> $b} keys %byaddr;
+    $addr = 0;
+    while(@addrs) {
+	my($next) = shift @addrs;
+	if ($next > $addr) {
+	    print "... ", ($next - $addr), " bytes unaccounted for\n";
+	}
+	my(@uses) = @{$byaddr{$next}};
+	printf "%08x %s\n", $next, join(', ', @uses);
+
+	# strip off the length (log_2(length) really) from the info str
+	($len = $uses[0]) =~ s/ .*//;
+	$addr = $next + ( 1 << (0 + $len) );
+    }
 }
 
 sub getblock {
