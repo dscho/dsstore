@@ -82,7 +82,6 @@ sub readFilename {
     my($block) = @_;
 
     my($flen) = $block->read(4, 'N');
-    print "flen=$flen\n";
     my($utf16be) = $block->read(2 * $flen);
     
     return decode('UTF-16BE', $utf16be, Encode::FB_CROAK);
@@ -114,7 +113,7 @@ sub open {
     # parse out the offsets of all the allocated blocks
     # these are in tagged offset format (27 bits offset, 5 bits size)
     my($offsetcount, $unk3) = $rootblock->read(8, 'NN');
-    print "c0 $offsetcount c1 $unk3\n";
+    # not sure what the word following the offset count is
     $self->{'unk3'} = $unk3;
     # For some reason, offsets are always stored in blocks of 256.
     my(@offsets);
@@ -214,7 +213,7 @@ sub blockByNumber {
     my($offset, $len);
     $offset = $addr & ~0x1F;
     $len = 1 << ( $addr & 0x1F );
-    print "  node id $id is $len bytes at 0x".sprintf('%x', $offset)."\n";
+#    print "  node id $id is $len bytes at 0x".sprintf('%x', $offset)."\n";
     return $self->getblock($offset, $len);
 }
 
@@ -225,7 +224,6 @@ use Carp;
 sub read {
     my($self, $len, $unpack) = @_;
     my($pos) = $self->[2];
-    print "reading $len at $pos\n";
     die "out of range: pos=$pos len=$len max=".(length($self->[1])) if $pos + $len > length($self->[1]);
     my($bytes) = substr($self->[1], $pos, $len);
     $self->[2] = $pos + $len;
