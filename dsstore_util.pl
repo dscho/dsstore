@@ -194,6 +194,7 @@ sub listblocks {
     }
 }
 
+# Retrieve a block (a BuddyAllocator::Block instance) by offset & length
 sub getblock {
     my($self, $offset, $size) = @_;
     $self->{fh}->seek($offset + $self->{fudge}, 0);
@@ -205,6 +206,7 @@ sub getblock {
     bless($block, 'BuddyAllocator::Block');
 }
 
+# Retrieve a block by its block number (small integer)
 sub blockByNumber {
     my($self, $id) = @_;
     my($addr) = $self->{offsets}->[$id];
@@ -218,6 +220,8 @@ sub blockByNumber {
 
 package BuddyAllocator::Block;
 
+use Carp;
+
 sub read {
     my($self, $len, $unpack) = @_;
     my($pos) = $self->[2];
@@ -229,23 +233,21 @@ sub read {
     $unpack? unpack($unpack, $bytes) : $bytes;
 }
 
-=cut
+sub length {
+    return length($_[0]->[1]);
+}
 
-sub readStore {
-    my($fh) = @_;
-
-
-    die "bad magic" unless $magic eq 'Bud1';
-    $fh->seek($itemStart, 0);
-    for(my $itemNumber = 0; $itemNumber < $itemCount; $itemNumber ++) {
-	print "item $itemNumber of $itemCount, at ".(sprintf '%08x', $fh->tell())."\n";
-	print Dumper(&readItem($fh));
+sub seek {
+    my($self, $pos, $whence) = @_;
+    $whence = 0 unless defined $whence;
+    if ($whence == 0) {
+	# pos = pos
+    } elsif ($whence == 1) {
+	$pos += $self->[2];
+    } elsif ($whence == 2) {
+	$pos += $self->length();
+    } else {
+	croak "seek: whence=$whence";
     }
+    $self->[2] = $pos;
 }
-
-&readStore(new IO::File '/Users/ximl/Desktop/.DS_Store', 'r');
-
-sub read4CC {
-    &readBytes($_[0], 4);
-}
-
