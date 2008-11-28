@@ -10,36 +10,54 @@ $foo = BuddyAllocator::open(new IO::File $ARGV[0], 'r');
 print Dumper([ $foo, unpack('NNN', $foo->{unk2}) ]);
 $treeheader = $foo->blockByNumber($foo->{toc}->{DSDB});
 
-#print Dumper([ $treeheader->read(20, 'N5') ]);
-#print Dumper([ &readBTreeNode($foo->blockByNumber($treeheader->read(4, 'N'))) ]);
+{
+    my(@treeheader) = $treeheader->read(20, 'N5');
+    print Dumper(\@treeheader);
+#    print Dumper([ &readBTreeNode($foo->blockByNumber($treeheader[0])) ]);
+    &traverse_btree($foo, $treeheader[0], sub { print $_[0]->[1], ' ', $_[0]->[0], "\n"; } );
+}
 
-#print Dumper([ &readBTreeNode($foo->blockByNumber( 2 )) ]);
 
-$foo->listblocks();
+sub traverse_btree {
+    my($store, $nodenr, $callback) = @_;
+
+    my($values, $pointers) = &readBTreeNode( $store->blockByNumber( $nodenr ) );
+    if (defined $pointers) {
+	die "Value count should be one less than pointer count" 
+	    unless ( @$values + 1 ) == ( @$pointers ) ;
+	&traverse_btree($store, shift(@$pointers), $callback);
+	while(@$values) {
+	    &{$callback}(shift @$values);
+	    &traverse_btree($store, shift(@$pointers), $callback);
+	}
+    } else {
+	&{$callback}($_) foreach @$values;
+    }
+}
 
 
 sub readBTreeNode {
     my($node) = @_;
 
-    my($height) = $node->read(4, 'N');
+    my($pointer) = $node->read(4, 'N');
 
     my($count) = $node->read(4, 'N');
-    if ($height > 0) {
+    if ($pointer > 0) {
 	my(@pointers, @values);
-	push(@pointers, $node->read(4, 'N'));
 	while($count) {
-	    push(@values, &readDesktopDBEntry($node));
 	    push(@pointers, $node->read(4, 'N'));
+	    push(@values, &readDesktopDBEntry($node));
 	    $count --;
 	}
-	return $height, \@values, \@pointers;
+	push(@pointers, $pointer);
+	return \@values, \@pointers;
     } else {
 	my(@values);
 	while($count) {
 	    push(@values, &readDesktopDBEntry($node));
 	    $count --;
 	}
-	return $height, \@values, undef;
+	return \@values, undef;
     }
 }
 
