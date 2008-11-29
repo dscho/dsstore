@@ -46,7 +46,7 @@ sub readBTreeNode {
 	my(@pointers, @values);
 	while($count) {
 	    push(@pointers, $node->read(4, 'N'));
-	    push(@values, &readDesktopDBEntry($node));
+	    push(@values, &DesktopDB::readEntry($node));
 	    $count --;
 	}
 	push(@pointers, $pointer);
@@ -54,10 +54,32 @@ sub readBTreeNode {
     } else {
 	my(@values);
 	while($count) {
-	    push(@values, &readDesktopDBEntry($node));
+	    push(@values, &DesktopDB::readEntry($node));
 	    $count --;
 	}
 	return \@values, undef;
+    }
+}
+
+sub writeBTreeNode {
+    my($into, $values, $pointers) = @_;
+
+    if (!$pointers) {
+	# A leaf node: no pointers, just database entries.
+	$into->write('NN', 0, scalar(@$values));
+	$_->write($into) foreach @$values;
+    } else {
+	# An internal node: interleaved pointers and values,
+	# with the final pointer moved to the front.
+	my(@vals) = @$values;
+	my(@ps) = @$pointers;
+	die "number of pointers must be one more than number of entries"
+	    unless 1+@vals == @ps;
+	$into->write('NN', pop(@ps), scalar(@vals));
+	while(@vals) {
+	    $into->write('N', shift(@ps));
+	    ( shift(@vals) )->write($into);
+	}
     }
 }
 
@@ -73,7 +95,9 @@ sub readBytes {
     return $unpack? unpack($unpack, $value) : $value;
 }
 
-sub readDesktopDBEntry {
+package DesktopDB;
+
+sub readEntry {
     my($block) = @_;
 
     my($filename, $strucID, $strucType, $value);
@@ -93,7 +117,8 @@ sub readDesktopDBEntry {
 	die "Unknown struc type '$strucType', died";
     }
 
-    return [ $filename, $strucId, $strucType, $value ];
+    return bless([ $filename, $strucId, $strucType, $value ],
+		 'DesktopDB::Entry');
 }
 
 sub readFilename {
@@ -102,7 +127,54 @@ sub readFilename {
     my($flen) = $block->read(4, 'N');
     my($utf16be) = $block->read(2 * $flen);
     
-    return decode('UTF-16BE', $utf16be, Encode::FB_CROAK);
+    return Encode::decode('UTF-16BE', $utf16be, Encode::FB_CROAK);
+}
+
+package DesktopDB::Entry;
+
+sub byteSize {
+    my($filename, $strucId, $strucType, $value) = @{$_[0]};
+    my($size);
+
+    # TODO: We're assuming that the filename is completely normal
+    # basic-multilingual-plane characters, and doesn't need to be de/re-
+    # composed or anything.
+    $size = length($filename) * 2 + 12;
+    # 12 bytes: 4 each for filename length, struct id, and struct type
+
+    if ($strucType eq 'long' or $strucType eq 'shor') {
+	$size += 4;
+    } elsif ($strucType eq 'bool') {
+	$size += 1;
+    } elsif ($strucType eq 'blob') {
+	$size += length($value);
+    } else {
+	die "Unknown struc type '$strucType', died";
+    }
+
+    $size;
+}
+
+sub write {
+    my($self, $into) = @_;
+    
+    my($fname) = Encode::encode('UTF-16BE', $self->[0]);
+
+    my($strucType) = $self->[2];
+
+    $into->write('N a* a4 a4', length($fname)/2, $fname,
+		 $self->[1], $strucType);
+
+    if ($strucType eq 'long' or $strucType eq 'shor') {
+	$into->write('N', $self->[3]);
+    } elsif ($strucType eq 'bool') {
+	$into->write('C', $self->[3]);
+    } elsif ($strucType eq 'blob') {
+	$into->write('N', length($self->[3]));
+	$into->write($self->[3]);
+    } else {
+	die "Unknown struc type '$strucType', died";
+    }
 }
 
 package BuddyAllocator;
@@ -169,7 +241,7 @@ sub open {
 
 # List all the blocks in order and see if there are any gaps or overlaps.
 sub listblocks {
-    my($self) = @_;
+    my($self, $verbose) = @_;
     my(%byaddr);
     my($addr, $len);
 
@@ -194,22 +266,64 @@ sub listblocks {
 	}
     }
 
+    my($gaps, $overlaps) = (0, 0);
+
     # Loop through the blocks in order of address
     my(@addrs) = sort {$a <=> $b} keys %byaddr;
     $addr = 0;
     while(@addrs) {
 	my($next) = shift @addrs;
 	if ($next > $addr) {
-	    print "... ", ($next - $addr), " bytes unaccounted for\n";
+	    print "... ", ($next - $addr), " bytes unaccounted for\n"
+		if $verbose;
+	    $gaps ++;
 	}
 	my(@uses) = @{$byaddr{$next}};
-	printf "%08x %s\n", $next, join(', ', @uses);
+	printf "%08x %s\n", $next, join(', ', @uses)
+	    if $verbose;
+	$overlaps ++ if @uses > 1;
 
 	# strip off the length (log_2(length) really) from the info str
 	($len = $uses[0]) =~ s/ .*//;
 	$addr = $next + ( 1 << (0 + $len) );
     }
+
+    ( $gaps == 0 && $overlaps == 0 );
 }
+
+sub writeRootblock {
+    my($self, $into) = @_;
+
+    my(@offsets) = @{$self->{'offsets'}};
+    
+    # Write the offset count & the unknown field that follows it
+    $into->write('NN', scalar(@offsets), $self->{'unk3'});
+    
+    # Write the offsets (using 0 to indicate an unused slot)
+    $into->write('N*', map { (defined($_) && $_ > 0)? $_ : 0 } @offsets);
+    
+    # The offsets are always written in blocks of 256.
+    my($offsetcount) = scalar(@offsets) % 256;
+    if ($offsetcount > 0) {
+	# Fill out the last block
+	$into->write('N*', (0) x (256-$offsetcount));
+    }
+
+    # The DS_Store files only ever have one item in their
+    # table of contents, so I'm not sure if it needs to be sorted or what
+    my(@tockeys) = sort keys %{$self->{'toc'}};
+    $into->write('N', scalar(@tockeys));
+    foreach my $entry (@tockeys) {
+	$into->write('C a* N', length($entry), $entry, $self->{'toc'}->{$entry});
+    }
+    
+    # And finally the freelists
+    for my $width ( 0 .. 31 ) {
+	my($blks) = $self->{'freelist'}->{$width};
+	$into->write('N N*', scalar(@$blks), @$blks);
+    }
+}
+    
 
 # Retrieve a block (a BuddyAllocator::Block instance) by offset & length
 sub getblock {
