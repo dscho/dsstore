@@ -71,6 +71,11 @@ A boolean value, stored as one byte.
 An arbitrary block of bytes, stored as an integer followed by that
 many bytes of data.
 
+=item C<'ustr'>
+
+A Unicode text string, stored as an integer character count followed 
+by 2*count bytes of data in UTF-16.
+
 =back
 
 =back
@@ -85,11 +90,27 @@ I've encountered the following record types:
 
 =item C<'BKGD'>
 
-12-byte C<blob>, F<.> only. Indicates the background image of the
-Finder window viewing this directory (in icon mode). It contains
-either the 4CC C<PctB>, followed by the the length of the blob
-stred in the C<'pict'> record, followed by an unknown integer; or the
-4CC C<DefB>, followed by eight unknown bytes.
+12-byte C<blob>, F<.> only. Indicates the background of the
+Finder window viewing this directory (in icon mode). The format
+depends on the kind of background:
+
+=over
+
+=item Default background
+
+FourCharcode C<DefB>, followed by eight unknown bytes, probably garbage.
+
+=item Solid color
+
+FourCharCode C<ClrB>, followed by an RGB value in six bytes, followed by two unknown bytes.
+
+=item Picture
+
+FourCharCode C<PctB>, followed by the the length of the blob
+stored in the C<'pict'> record, followed by four unknown bytes.
+The C<'pict'> record points to the actual background image.
+
+=back
 
 =item C<'ICVO'>
 
@@ -109,6 +130,10 @@ size comes from the icvo blob.
 
 C<bool>, attached to directories and files. Purpose unknown.
 
+=item C<'cmmt'>
+
+C<ustr>, containing a file's "Spotlight Comments".
+
 =item C<'dilc'>
 
 32-byte C<blob>, attached to files. Unknown, may indicate the icon
@@ -116,7 +141,8 @@ location when files are displayed on the desktop.
 
 =item C<'dscl'>
 
-C<bool>, attached to files. Unknown.
+C<bool>, attached to subdirectories. Indicates whether the
+subdirectory is open (disclosed) in list view.
 
 =item C<'fwi0'>
 
@@ -162,16 +188,17 @@ corresponding to the selected icon view size, then 4 unknown bytes
 C<6e 6f 6e 65> (the text "none", guess that this is the "keep
 arranged by" setting?).
 
-If the first 4 bytes are "icv4", then
-two unknown bytes,
-a 4CC (I've seen C<none> and C<grid>),
-another 4CC, typically C<botm>,
+If the first 4 bytes are "icv4", then:
+two bytes indicating the icon size in pixels, typically 48;
+a 4CC indicating the "keep arranged by" setting
+(or C<none> for none or C<grid> for align to grid);
+another 4CC, either C<botm> or C<rght>,  indicating the label position I<w.r.t.> the icon;
 and then 12 unknown bytes (flags?).
 
 =item C<'icvt'>
 
 C<shor>, F<.> only.
-Icon view text label (filename) size.
+Icon view text label (filename) size, in points.
 
 =item C<'info'>
 
@@ -192,7 +219,7 @@ view, their widths, and their sort ordering if any.
 =item C<'lsvt'>
 
 C<shor>, directories and files.
-Unknown. Always seems to be 12.
+List view text (filename) size, in points.
 
 =item C<'pict'>
 
