@@ -205,8 +205,60 @@ the actual background image. See also C<'BKGD'>.
 
 =head2 B-Tree
 
-The records are stored in a B-tree structure. There is a master block
-containing five integers, one of which points to the root node of the B-tree.
+The records are stored in a B-tree structure. The B-tree consists of a
+small master block containing a few statistics and a pointer to the
+root node; one or more leaf (external) nodes; and zero or more
+non-leaf (internal) nodes.
+
+The header block is 20 bytes long and contains five integers:
+
+=over
+
+=item 0
+
+The block number of the root node of the B-tree
+
+=item 1
+
+The number of levels of internal nodes (tree height minus one --- that
+is, for a tree containing only a single, leaf, node this will be zero)
+
+=item 2
+
+The number of records in the tree
+
+=item 3
+
+The number of nodes in the tree (tree nodes, not including this header
+block)
+
+=item 4
+
+Always 0x1000, probably the tree node page size 
+
+=back
+
+Individual nodes are either leaf nodes containing a bunch of records,
+or non-leaf (internal) nodes containing N records and N+1 pointers to
+child nodes.
+
+Each node starts with two integers, C<P> and C<count>. If C<P> is 0,
+then this is a leaf node and C<count> is immediately followed by that
+many records. If C<P> is nonzero, then this is an internal node, and
+C<count> is followed by the block number of the leftmost child, then a
+record, then another block number, I<etc.>, for a total of C<count>
+child pointers and C<count> records. C<P> is itself the rightmost
+child pointer, that is, it is logically at the end of the node.
+
+This relies on 0 not being a valid value for a block number. As far as
+I can tell, 0 is a valid value for a block number but it always holds
+the block containing the buddy allocator's internal information,
+presumably because that block is allocated first.
+
+The ordering of records within the B-tree is by case-insensitive
+comparison of their filenames, secondarily sorted on the structure
+ID (record type) field. My guess is that the string comparison follows
+the same rules as HFS+ described in Apple's TN1150.
 
 =head2 Buddy Allocator
 
