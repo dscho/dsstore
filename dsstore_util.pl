@@ -100,7 +100,7 @@ package DesktopDB;
 sub readEntry {
     my($block) = @_;
 
-    my($filename, $strucID, $strucType, $value);
+    my($filename, $strucId, $strucType, $value);
 
     $filename = &readFilename($block);
     $strucId = $block->read(4);
@@ -113,6 +113,9 @@ sub readEntry {
     } elsif ($strucType eq 'blob') {
 	my($bloblen) = $block->read(4, 'N');
 	$value = $block->read($bloblen);
+    } elsif ($strucType eq 'ustr') {
+	my($strlen) = $block->read(4, 'N');
+	$value = Encode::decode('UTF-16BE', $block->read(2 * $strlen));
     } else {
 	die "Unknown struc type '$strucType', died";
     }
@@ -148,6 +151,8 @@ sub byteSize {
 	$size += 1;
     } elsif ($strucType eq 'blob') {
 	$size += length($value);
+    } elsif ($strucType eq 'ustr') {
+	$size += 4 + 2 * length($value);
     } else {
 	die "Unknown struc type '$strucType', died";
     }
@@ -172,6 +177,9 @@ sub write {
     } elsif ($strucType eq 'blob') {
 	$into->write('N', length($self->[3]));
 	$into->write($self->[3]);
+    } elsif ($strucType eq 'ustr') {
+	$into->write('N', length($self->[3]));
+	$into->write(Encode::encode('UTF-16BE', $self->[3]));
     } else {
 	die "Unknown struc type '$strucType', died";
     }
@@ -253,7 +261,7 @@ sub listblocks {
 
     # Store all the numbered/allocated blocks from @offsets
     for my $blnum (0 .. $#{$self->{'offsets'}}) {
-	$addr_size = $self->{'offsets'}->[$blnum];
+	my($addr_size) = $self->{'offsets'}->[$blnum];
 	$addr = $addr_size & ~0x1F;
 	$len = $addr_size & 0x1F;
 	push(@{$byaddr{$addr}}, "$len (blkid $blnum)");
