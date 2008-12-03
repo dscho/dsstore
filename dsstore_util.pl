@@ -331,7 +331,7 @@ sub writeRootblock {
 	$into->write('N N*', scalar(@$blks), @$blks);
     }
 }
-    
+
 
 # Retrieve a block (a BuddyAllocator::Block instance) by offset & length
 sub getblock {
@@ -355,6 +355,101 @@ sub blockByNumber {
     $len = 1 << ( $addr & 0x1F );
 #    print "  node id $id is $len bytes at 0x".sprintf('%x', $offset)."\n";
     return $self->getblock($offset, $len);
+}
+
+# Return freelist + index of a block's buddy in its freelist (or empty list)
+sub _buddy {
+    my($self, $offset, $width) = @_;
+    my($freelist, $buddyaddr);
+
+    $freelist = $self->{'freelist'}->{$width};
+    $buddyaddr = $offset ^ ( 1 << $width );
+
+    return ($freelist,
+	    grep { $freelist->[$_] == $buddyaddr } 0 .. $#$freelist );
+}
+
+sub _free {
+    my($self, $offset, $width) = @_;
+
+    my($freelist, $buddyindex) = $self->_buddy($offset, $width);
+
+    if(defined($buddyindex)) {
+	# our buddy is free. Coalesce, and add the coalesced block to flist.
+	my($buddyoffset) = splice(@$freelist, $buddyindex, 1);
+	$self->_free($offset & $buddyoffset, $width+1);
+    } else {
+	@$freelist = sort( @$freelist, $offset );
+    }
+}
+
+sub _alloc {
+    my($self, $width) = @_;
+    
+    my($flist) = $self->{'freelist'}->{$width};
+    if (@$flist) {
+	# There is a block of the desired size; return it.
+	return shift @$flist;
+    } else {
+	# Allocate a block of the next larger size; split it.
+	my($offset) = $self->_alloc($width + 1);
+	# and put the other half on the free list.
+	my($buddy) = $offset ^ ( 1 << $width );
+	$self->_free($buddy, $width);
+	return $offset;
+    }
+}
+
+sub allocate {
+    my($self, $bytes, $blocknum) = @_;
+    my($offsets) = $self->{'offsets'};
+
+    if(!defined($blocknum)) {
+	$blocknum = 1;
+	# search for an empty slot, or extend the array
+	$blocknum++ while defined($offsets->[$blocknum]);
+    }
+
+    my($wantwidth) = 5;
+    # Minimum width, since that's how many low-order bits we steal for the tag
+    $wantwidth ++ while $bytes > 1 << $wantwidth;
+
+    my($blkaddr, $blkwidth, $blkoffset);
+
+    if(exists($offsets->[$blocknum]) && $offsets->[$blocknum]) {
+	$blkaddr = $offsets->[$blocknum];
+	$blkwidth = $blkaddr & 0x1F;
+	$blkoffset = $blkaddr & ~0x1F;
+	if ($blkwidth == $wantwidth) {
+	    # The block is currently of the desired size. Leave it alone.
+	    return $blkoffset;
+	} else {
+	    # Free the current block, allocate a new one.
+	    $self->_free($blkoffset, $blkwidth);
+	    delete $offsets->[$blocknum];
+	}
+    }
+
+    # Allocate a block, update the offsets table, and return the new offset
+    $blkoffset = $self->_alloc($wantwidth);
+    $blkaddr = $blkoffset | $wantwidth;
+    $offsets->[$blocknum] = $blkaddr;
+    $blkoffset;
+}
+
+sub free {
+    my($self, $blknum) = @_;
+    my($blkaddr) = $self->{'offsets'}->[$blknum];
+
+    if($blkaddr) {
+	my($blkoffset, $blkwidth);
+	$blkwidth = $blkaddr & 0x1F;
+	$blkoffset = $blkaddr & ~0x1F;
+	$self->_free($blkoffset, $blkwidth);
+    }
+
+    delete $self->{'offsets'}->[$blknum];
+    undef;
 }
 
 package BuddyAllocator::Block;
