@@ -237,7 +237,8 @@ small master block containing a few statistics and a pointer to the
 root node; one or more leaf (external) nodes; and zero or more
 non-leaf (internal) nodes.
 
-The header block is 20 bytes long and contains five integers:
+The header block is pointed to by the C<DSDB> entry in the buddy
+allocator's directory. It is 20 bytes long and contains five integers:
 
 =over
 
@@ -291,11 +292,117 @@ the same rules as HFS+ described in Apple's TN1150.
 
 B-tree pages and other info are stored in blocks managed by a buddy
 allocator. The allocator maintains a list of the offsets and sizes of
-blocks (referred to by small integers) and a freelist. 
+blocks (indexed by small integers) and a freelist. 
 The allocator also stores a small amount of metadata, including a
 directory or table of contents which maps short strings to block
 numbers. The only entry in that table of contents maps the string
 C<DSDB> ("desktop services database"?) to the B-tree's master block.
+
+The buddy allocator is in charge of all but the first 36 bytes of
+the file, and manages a notional 2GB address space, although the file is
+of course truncated to the last allocated block. All its offsets are
+relative to the fourth byte of the file. Another way to describe this
+is that the file consists of a four-byte header (always C<00 00 00
+01>) followed by a 2GB buddy-allocated area, the first 32-byte block
+of which is allocated but does not appear on the buddy allocator's
+allocation list.
+
+The 32-byte header has the following fields:
+
+=over
+
+=item *
+
+Magic number C<Bud1> (C<42 75 64 31>)
+
+=item *
+
+Offset to the allocator's bookkeeping information block
+
+=item *
+
+Size of the allocator's bookkeeping information block
+
+=item *
+
+A second copy of the offset; the Finder will refuse to read the file
+if this does not match the first copy. Perhaps this is a safeguard
+against corruption from an interrupted write transaction.
+
+=item *
+
+Sixteen bytes of unknown purpose.
+These might simply be the unused space at the end of the block,
+since
+the minimum allocation size is 32 bytes, as will be seen later.
+
+=back
+
+The offset and size indicate where to find the block containing the
+rest of the buddy allocator's state. That block has the following
+fields:
+
+=over
+
+=item Block count
+
+Integer. The number of blocks in the allocated-blocks list.
+
+=item Unknown
+
+Four unknown bytes. Appear to always be 0.
+
+=item Block addresses
+
+Array of integers. There are I<block count> block addresses here, with
+unassigned block numbers represented by zeroes. This is followed by
+enough zeroes to round the section up to the next multiple of 256
+entries (1024 bytes).
+
+=item Directory count
+
+Integer, indicates the number of directory entries.
+
+=item Directory entries
+
+Each consists of a 1-byte count, followed by that many bytes of name
+(in ASCII or perhaps some 1-byte superset such as MacRoman), followed
+by a 4-byte integer containing the entry's block number.
+
+=item Free lists
+
+There are 32 freelists, one for each power of two from 2^0 to
+2^31. Each freelist has a count followed by that many offsets.
+
+=back
+
+There are three different ways to refer to a given block. Most of the
+file uses what I call block numbers or block IDs, which are indexes
+into the C<block address> table. Block ID 0 always seems to refer to
+the buddy allocator's metadata block itself.
+
+The entries in the block address table are what I call block addresses.
+Each address is a packed offset+size. The least-significant 5 bits of
+the number indicate the block's size, as a power of 2 (from 2^5 to
+2^31). If those bits are masked off, the result is the starting offset
+of the block (keeping in mind the 4-byte fudge factor). Since the
+lower 5 bits are unusable to store an offset, blocks must be allocated
+on 32-byte boundaries, and as a side effect the minimum block size is
+32 bytes
+(in which case the least significant 5 bits are equal to C<0x05>).
+
+The free lists contain actual block offsets, not "addresses". The
+size of the referenced blocks is implied by which freelist the block
+is in; a free block in freelist N is 2^N bytes long.
+
+Although the header block is not explicitly allocated, the allocator
+behaves as if it is; other blocks are split in order to accomodate it
+in the buddy scheme, and its buddy block (at 0x20) is either on the
+freelist or allocated. (Usually it holds the B-tree's master block.)
+
+Other than the 4-byte prefix and the 32-byte header block, every byte
+in the file is either in a block on the allocated blocks list, or is in a
+block on one of the free lists.
 
 =head1 CREDITS
 
