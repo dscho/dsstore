@@ -21,6 +21,7 @@ be reflected in the file.
 
 =cut
 
+use Carp;
 use strict;
 
 our($VERSION) = '0.9';
@@ -104,6 +105,59 @@ sub open {
     return $self;
 }
 
+=head2 $allocator = Mac::Finder::DSStore::BuddyAllocator->new($fh)
+
+Similar to C<open>, but does not read anything from the file. This
+can be used to create a new file from scratch.
+
+=cut
+
+sub new {
+    my($cls, $fh) = @_;
+
+    my($self) = {
+	fh => $fh,
+	toc => { },
+	offsets => [ ],
+	freelist => { },
+
+	# And the mystery meat goes here...
+	unk2 => pack('NNNN', 0x100C, 0x0087, 0x200B, 0 ),
+	unk3 => 0,
+	fudge => 4
+    };
+    bless($self, ref $cls || $cls);
+
+    # All our freelists are empty...
+    foreach my $width (0 .. 30) {
+	$self->{freelist}->{$width} = [ ];
+    }
+    # ... except for a single 2GB block starting at 0
+    $self->{freelist}->{31} = [ 0 ];
+
+    # Allocate the header block, 2^5 bytes wide
+    my($hdr) = $self->_alloc(5);
+    # it had better be at offset zero
+    ( $hdr == 0 ) or die;
+
+    $self;
+}
+
+=head2 $allocator->close( )
+
+Closes the underlying file handle.
+
+=cut
+
+sub close {
+    my($self) = @_;
+    my($fh) = $self->{fh};
+
+    delete $self->{fh};
+
+    $fh->close;
+}
+
 =head2 $allocator->listBlocks($verbose)
 
 List all the blocks in order and see if there are any gaps or overlaps.
@@ -174,8 +228,25 @@ back to the file.
 sub writeMetaData {
     my($self) = @_;
 
+    # Root block nr is hardcoded to 0.
+    # We don't actually care, but the DSStore btree does.
+    my($blocknr) = 0;
+
     my($rbs) = $self->rootBlockSize();
-    $self->allocate($rbs, 0);
+    $self->allocate($rbs, $blocknr);
+    
+    $self->writeRootblock($self->blockByNumber($blocknr, 1));
+
+    my($blockOffset, $blockLength) = $self->blockOffset($blocknr);
+
+    $self->{fh}->seek(0, 0);
+    $self->{fh}->write(pack('N', 1)); # magic1
+    $self->_sought(0)->write(pack('a4 NNN a16',
+				  'Bud1', # magic
+				  $blockOffset, $blockLength, $blockOffset,
+				  $self->{unk2}));
+
+    $self->{fh}->flush;
 }
 
 sub rootBlockSize {
@@ -235,9 +306,12 @@ sub writeRootblock {
     }
 }
 
-=head2 $block = $allocator->blockByNumber(blocknumber)
+=head2 $block = $allocator->blockByNumber(blocknumber[, write])
 
-Retrieves a block by its block number or block ID.
+Retrieves a block by its block number (I<aka> block ID).
+
+If C<write> is supplied and is true, then the returned block implements the
+C<write> method but not the C<read> method.
 
 =head2 $block = $allocator->getBlock(offset, size)
 
@@ -248,25 +322,33 @@ Normally you should use C<blockByNumber> instead of this method.
 
 sub getBlock {
     my($self, $offset, $size) = @_;
-    $self->{fh}->seek($offset + $self->{fudge}, 0);
-    
-    my($value);
-    $self->{fh}->read($value, $size) == $size
-	or die;
-    my($block) = [ $self, $value, 0 ];
-    bless($block, 'Mac::Finder::DSStore::BuddyAllocator::Block');
+
+    return Mac::Finder::DSStore::BuddyAllocator::Block->new($self, $offset, $size);
 }
 
 # Retrieve a block by its block number (small integer)
 sub blockByNumber {
-    my($self, $id) = @_;
+    my($self, $id, $write) = @_;
     my($addr) = $self->{offsets}->[$id];
     return undef unless $addr;
     my($offset, $len);
     $offset = $addr & ~0x1F;
     $len = 1 << ( $addr & 0x1F );
 #    print "  node id $id is $len bytes at 0x".sprintf('%x', $offset)."\n";
-    return $self->getBlock($offset, $len);
+    if (!defined($write) || !$write) {
+	return Mac::Finder::DSStore::BuddyAllocator::Block->new($self, $offset, $len);
+    } else {
+	return Mac::Finder::DSStore::BuddyAllocator::WriteBlock->new($self, $offset, $len);
+    }
+}
+
+sub blockOffset {
+    my($self, $id, $write) = @_;
+    my($addr) = $self->{offsets}->[$id];
+    croak "Block $id is not allocated" unless $addr;
+    my($offset) = $addr & ~0x1F;
+    return $offset unless wantarray;
+    return ( $offset,  1 << ( $addr & 0x1F ) );
 }
 
 # Return freelist + index of a block's buddy in its freelist (or empty list)
@@ -418,7 +500,22 @@ are integers. This table of contents is read and written as part of the
 allocator's metadata but is not otherwise used by the allocator;
 users of the allocator use it to find their data within the file.
 
+=head2 $allocator->{fh}
+
+The file handle passed in to C<open> or C<new>. If you find yourself needing
+to use this, you should probably try to extend the class so that you don't.
+
 =cut
+
+# Used by ...::Block to get a positioned file handle.
+sub _sought {
+    my($self, $offset) = @_;
+
+    my($fh) = $self->{fh};
+    $fh->seek($offset + $self->{fudge}, 0)
+	or croak;
+    $fh;
+}
 
 package Mac::Finder::DSStore::BuddyAllocator::Block;
 
@@ -442,13 +539,43 @@ Returns the length (or size) of this block.
 
 Adjusts the read/write pointer within the block.
 
+=head2 $block->write(bytes)
+=head2 $block->write(format, items...)
+
+Writes data to the underlying file, at the position represented by this
+block. If multiple arguments are given, the first is a format string
+and the rest are the remaining arguments to C<pack>.
+
 =cut
 
 use Carp;
 use strict;
 
+#
+# Block objects are created by the buddy allocator; they're a
+# reference to an array with the following components:
+#
+#  [ $allocator, $value, $position]
+#
+
+sub new {
+    my($class, $allocator, $offset, $size) = @_;
+
+    my($value);
+    $allocator->_sought($offset)->read($value, $size)
+	> 0 or die;
+    # Previously, this died if we couldn't read the full block.
+    # Not sure if it's really an error not to read the full
+    # block if the next layer up doesn't need the full block.
+    # So now we're succeeding as long as we get something; if
+    # the reader overruns it'll die in substr().
+
+    bless([ $allocator, $value, 0 ], ref $class || $class);
+}
+
 sub read {
     my($self, $len, $unpack) = @_;
+
     my($pos) = $self->[2];
     die "out of range: pos=$pos len=$len max=".(length($self->[1])) if $pos + $len > length($self->[1]);
     my($bytes) = substr($self->[1], $pos, $len);
@@ -476,6 +603,70 @@ sub seek {
     $self->[2] = $pos;
 }
 
+package Mac::Finder::DSStore::BuddyAllocator::WriteBlock;
+
+use Carp;
+use strict;
+
+#
+# Write blocks
+#
+
+sub new {
+    my($class, $allocator, $offset, $size) = @_;
+
+    croak "Missing arguments"
+	unless defined($offset) && defined($size);
+    croak "Bad offset"
+	if $offset <= 0;
+
+    bless([ $allocator, undef, 0, $offset, $size ], ref $class || $class);
+}
+
+sub read {
+    my($self) = @_;
+
+    croak "This is a write-only block";
+}
+
+sub length {
+    return ($_[0]->[4]);
+}
+
+sub seek {
+    my($self, $pos, $whence) = @_;
+    if ($whence == 0) {
+	$self->[2] = $pos;
+    } elsif ($whence == 1) {
+	$self->[2] += $pos;
+    } elsif ($whence == 2) {
+	$self->[2] = $self->length + $pos;
+    } else {
+	croak "seek: whence=$whence";
+    }
+    undef $self->[1];
+    $self;
+}
+
+sub write {
+    my($self, $what, @args) = @_;;
+
+    if (!defined($self->[1])) {
+	$self->[1] = $self->[0]->_sought($self->[2] + $self->[3]);
+    }
+
+    if (@args) {
+	$what = pack($what, @args);
+    }
+
+    $self->[1]->write($what);
+}
+
+sub close {
+    undef $_->[1];
+    1;
+}
+
 =head1 AUTHOR
 
 Written by Wim Lewis as part of the Mac::Finder::DSStore package.
@@ -486,5 +677,6 @@ This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+=cut
 
-
+1;
