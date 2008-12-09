@@ -181,6 +181,7 @@ sub listBlocks {
     # Store all the numbered/allocated blocks from @offsets
     for my $blnum (0 .. $#{$self->{'offsets'}}) {
 	my($addr_size) = $self->{'offsets'}->[$blnum];
+	next unless defined $addr_size;
 	$addr = $addr_size & ~0x1F;
 	$len = $addr_size & 0x1F;
 	push(@{$byaddr{$addr}}, "$len (blkid $blnum)");
@@ -585,7 +586,7 @@ sub read {
 }
 
 sub length {
-    return length($_[0]->[1]);
+    return CORE::length($_[0]->[1]);
 }
 
 sub seek {
@@ -601,6 +602,10 @@ sub seek {
 	croak "seek: whence=$whence";
     }
     $self->[2] = $pos;
+}
+
+sub copyback {
+    return $_[0]->[1];
 }
 
 package Mac::Finder::DSStore::BuddyAllocator::WriteBlock;
@@ -660,11 +665,52 @@ sub write {
     }
 
     $self->[1]->write($what);
+    $self->[2] += CORE::length($what);
 }
 
 sub close {
     undef $_->[1];
     1;
+}
+
+#
+# This is just here for debugging/testing purposes
+#
+
+sub copyback {
+    my($self) = @_;
+
+    my($r) = Mac::Finder::DSStore::BuddyAllocator::Block->new(@{$self}[0, 3, 2]);
+
+    undef $self->[1]; # probably need to re-seek now
+
+    return $r;
+}
+
+package Mac::Finder::DSStore::BuddyAllocator::StringBlock;
+
+#
+# This one's kind of handy, really, but is only used for debugging and
+# test harnesses right now.
+#
+
+sub new {
+    my($x) = '';
+    bless(\$x, ref $_[0] || $_[0]);
+}
+
+sub write {
+    my($self, $what, @args) = @_;;
+
+    if (@args) {
+	$what = pack($what, @args);
+    }
+
+    ${$self} .= $what;
+}
+
+sub copyback {
+    ${$_[0]};
 }
 
 =head1 AUTHOR
