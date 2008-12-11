@@ -98,7 +98,7 @@ depends on the kind of background:
 
 =item Default background
 
-FourCharcode C<DefB>, followed by eight unknown bytes, probably garbage.
+FourCharCode C<DefB>, followed by eight unknown bytes, probably garbage.
 
 =item Solid color
 
@@ -396,7 +396,7 @@ size of the referenced blocks is implied by which freelist the block
 is in; a free block in freelist N is 2^N bytes long.
 
 Although the header block is not explicitly allocated, the allocator
-behaves as if it is; other blocks are split in order to accomodate it
+behaves as if it is; other blocks are split in order to accommodate it
 in the buddy scheme, and its buddy block (at 0x20) is either on the
 freelist or allocated. (Usually it holds the B-tree's master block.)
 
@@ -410,6 +410,6 @@ Original reverse-engineering effort by Mark Mentovai,
 L<https://wiki.mozilla.org/DS_Store_File_Format>. Some of the text
 describing record types has been copied from that wiki page.
 
-Further investigation and documntation by Wim Lewis.
+Further investigation and documentation by Wim Lewis.
 
 
