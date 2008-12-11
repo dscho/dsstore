@@ -664,8 +664,13 @@ sub write {
 	$what = pack($what, @args);
     }
 
+    my($wlen) = CORE::length($what);
+
+    croak "Writing past end of block (writing $wlen at ".($self->[2]).", end is at ".($self->[4])."), died"
+        if $self->[2]+$wlen > $self->[4];
+
     $self->[1]->write($what);
-    $self->[2] += CORE::length($what);
+    $self->[2] += $wlen;
 }
 
 sub close {

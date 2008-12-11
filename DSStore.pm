@@ -3,6 +3,8 @@ package Mac::Finder::DSStore;
 use strict;
 use POSIX qw(ceil);
 
+our($testpoint);
+
 sub getDSDBEntries {
     my($file, $callback) = @_;
 
@@ -56,7 +58,7 @@ sub putDSDBEntries {
 	my(@nchildren);
 
 	my($next) = 0;
-	foreach my $non (@interleaf, $#$recs) {
+	foreach my $non (@interleaf, 1+$#$recs) {
 	    my($blknr) = $file->allocate($pagesize);
 	    push(@nchildren, $blknr);
 	    my($blk) = $file->blockByNumber($blknr, 1);
@@ -126,6 +128,20 @@ sub traverse_btree {
     my($store, $nodenr, $callback) = @_;
     my($count);
     my($values, $pointers) = &readBTreeNode( $store->blockByNumber( $nodenr ) );
+
+    if ($testpoint) {
+        my($o) = Mac::Finder::DSStore::BuddyAllocator::StringBlock->new();
+        {
+            # Temporarily disable the test point so writeBTreeNode doesn't
+            # recursively invoke it
+            local($testpoint) = undef;
+            &writeBTreeNode($o, $values, $pointers);
+        }
+        my($actual) = $store->blockByNumber( $nodenr )->copyback;
+        my($roundtrip) = $o->copyback;
+        $actual = substr($actual, 0, length($roundtrip));
+        $testpoint->( $actual, $roundtrip );
+    }
 
     $count = @$values;
     
@@ -202,6 +218,11 @@ sub writeBTreeNode {
 	    ( shift(@vals) )->write($into);
 	}
     }
+
+    if($testpoint) {
+        my($x) = [ &readBTreeNode($into->copyback) ];
+        $testpoint->( [ $values, $pointers], $x );
+    }
 }
 
 package Mac::Finder::DSStore::Entry;
@@ -259,7 +280,7 @@ sub byteSize {
     } elsif ($strucType eq 'bool') {
 	$size += 1;
     } elsif ($strucType eq 'blob') {
-	$size += length($value);
+	$size += 4 + length($value);
     } elsif ($strucType eq 'ustr') {
 	$size += 4 + 2 * length($value);
     } else {
