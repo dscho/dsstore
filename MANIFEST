@@ -1,0 +1,6 @@
+BuddyAllocator.pm		Buddy allocator implementation
+Build.PL			Build script
+DSStore.pm			Main module
+DSStoreFormat.pod		In-depth file format notes
+MANIFEST			This list of files
+META.yml			Machine-readable package information

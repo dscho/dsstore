@@ -24,7 +24,7 @@ be reflected in the file.
 use Carp;
 use strict;
 
-our($VERSION) = '0.9';
+our($VERSION) = '0.90';
 
 # Debug logging. Uncomment these and all uses of them to activate.
 # It might be nice to make this more easily switchable.

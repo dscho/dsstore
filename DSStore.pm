@@ -3,6 +3,7 @@ package Mac::Finder::DSStore;
 use strict;
 use POSIX qw(ceil);
 
+our($VERSION) = '0.90';
 our($testpoint);
 
 sub getDSDBEntries {
