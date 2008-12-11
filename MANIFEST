@@ -1,3 +1,4 @@
+README				Read this first.
 BuddyAllocator.pm		Buddy allocator implementation
 Build.PL			Build script
 DSStore.pm			Main module
