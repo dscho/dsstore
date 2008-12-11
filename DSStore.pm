@@ -70,7 +70,7 @@ sub putDSDBEntries {
 		&writeBTreeNode($blk,
 				[ @$recs[ $next .. $non-1 ] ]);
 	    }
-	    $blk->close;
+            $blk->close(1);
 	    $next = $non + 1;
 	    $pagecount ++;
 	}
@@ -228,6 +228,59 @@ sub writeBTreeNode {
 package Mac::Finder::DSStore::Entry;
 
 use Encode ();
+use Carp qw(croak);
+
+#
+# Concrete types of known ids
+#
+our(%types) = (
+               'BKGD' => 'blob',
+               'cmmt' => 'ustr',
+               'dilc' => 'blob',
+               'dscl' => 'bool',
+               'fwi0' => 'blob',
+               'fwsw' => 'long',
+               'fwvh' => 'shor',
+               'icgo' => 'blob',
+               'icsp' => 'blob',
+               'icvo' => 'blob',
+               'ICVO' => 'bool',
+               'icvt' => 'shor',
+               'Iloc' => 'blob',
+               'info' => 'blob',
+               'lssp' => 'blob',
+               'lsvo' => 'blob',
+               'LSVO' => 'bool',
+               'lsvt' => 'shor',
+               'pict' => 'blob',
+               );
+
+sub new {
+    my($class, $filename, $strucId, @opts) = @_;
+    
+    croak "no opts supported yet, died" if @opts;
+
+    bless([ $filename, $strucId, $types{$strucId}, undef ],
+          ref $class || $class);
+}
+
+sub set {
+    my($self, $value) = @_;
+    
+    croak "Can't set a value on an entry with no concrete type"
+        unless defined($self->[2]);
+    
+    my($t) = $self->[2];
+    if($t eq 'blob' or $t eq 'ustr') {
+        $self->[3] = '' . $value;
+    } elsif ($t eq 'bool' or $t eq 'shor' or $t eq 'long') {
+        $self->[3] = 0 + $value;
+    } else {
+        die "Unknown concrete type $t, died";
+    }
+
+    1;
+}
 
 sub readEntry {
     my($class, $block) = @_;
@@ -315,5 +368,21 @@ sub write {
     }
 }
 
+sub cmp {
+    my($self, $other) = @_;
+
+    #
+    # There's probably some wacky Mac-specific Unicode collation
+    # rule for these, but case-insensitive comparison is a good
+    # approximation
+    #
+
+    # Ordering in the btree is Finder-filename-ordering on the files,
+    # and simple bytewise ordering on the structure IDs.
+
+    ( lc($self->[0]) cmp lc($other->[0]) ) 
+        ||
+    ( $self->[1] cmp $other->[1] );
+}
 
 1;

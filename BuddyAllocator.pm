@@ -589,6 +589,10 @@ sub length {
     return CORE::length($_[0]->[1]);
 }
 
+sub close {
+    1;
+}
+
 sub seek {
     my($self, $pos, $whence) = @_;
     $whence = 0 unless defined $whence;
@@ -674,7 +678,11 @@ sub write {
 }
 
 sub close {
-    undef $_->[1];
+    my($self, $fill) = @_;
+    if (defined($fill) && $fill && $self->[2] < $self->[4]) {
+        $self->write("\0" x ($self->[4] - $self->[2]));
+    }
+    undef $self->[1];
     1;
 }
 
