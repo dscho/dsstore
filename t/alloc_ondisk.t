@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 use File::Temp qw( tempfile );
-use Test::More tests => 17;
+use Test::More tests => 35;
 use Mac::Finder::DSStore::BuddyAllocator;
 use IO::File;
 
@@ -48,6 +48,26 @@ die "Couldn't reopen temporary file" unless defined $fh;
     $store->writeMetaData();
 
     &readback($store, $filename);
+
+    # Make sure this works near 256 allocated blocks
+    $store->allocate(20) foreach (5 .. 255);
+    is(scalar(@$a), 255, 'Should be 255 allocated blocks now');
+    ok($store->listBlocks(), 'Freelist is consistent');
+    $store->writeMetaData();
+    &readback($store, $filename);
+
+    $store->allocate(42);
+    is(scalar(@$a), 256, 'Should be 256 allocated blocks now');
+    ok($store->listBlocks(), 'Freelist is consistent');
+    $store->writeMetaData();
+    &readback($store, $filename);
+
+    $store->allocate(29);
+    is(scalar(@$a), 257, 'Should be 257 allocated blocks now');
+    ok($store->listBlocks(), 'Freelist is consistent');
+    $store->writeMetaData();
+    &readback($store, $filename);
+
 
     $store->close();
 }
