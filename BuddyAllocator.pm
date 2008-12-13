@@ -11,11 +11,12 @@ implements a buddy-allocation scheme within a file. It's used by
 C<Mac::Finder::DSStore> to read certain files created by the Macintosh
 Finder.
 
-Only the C<open> and C<writeMetaData> methods actually perform any
-file I/O. The contents of allocated blocks are read and written with
-methods on C<BuddyAllocator::Block>. If the C<allocate> and C<free>
-methods are used, C<writeMetaData> must be called for the changes to
-be reflected in the file.
+The allocation methods do not perform any actual file I/O.
+The contents of allocated blocks are read and written by the caller using
+methods on C<BuddyAllocator::Block>.
+If the C<allocate> and C<free> methods are used,
+or if the C<toc> hash is modified,
+C<writeMetaData> must be called for the changes to be reflected in the file.
 
 =head1 METHODS
 
@@ -79,6 +80,7 @@ sub open {
     }
     # 0 indicates an empty slot; don't need to keep those around
     while($offsets[$#offsets] == 0) { pop(@offsets); }
+    grep { $_ = undef if $_ == 0 } @offsets;
 
     # Next, read N key/value pairs
     my($toccount) = $rootblock->read(4, 'N');
@@ -232,6 +234,11 @@ sub writeMetaData {
     # Root block nr is hardcoded to 0.
     # We don't actually care, but the DSStore btree does.
     my($blocknr) = 0;
+
+    # Before computing the size of the rootblock to allocate it,
+    # make sure it'll be large enough to hold its own (eventual)
+    # allocation information.
+    $self->{offsets}->[0] = undef unless exists $self->{offsets}->[0];
 
     my($rbs) = $self->rootBlockSize();
     $self->allocate($rbs, $blocknr);
@@ -454,7 +461,7 @@ sub allocate {
 	    #&logf("Block is already width %d, no change", $wantwidth);
 	    #$loglevel --;
 	    # The block is currently of the desired size. Leave it alone.
-	    return $blkoffset;
+	    return $blocknum;
 	} else {
 	    #&logf("Freeing wrong-sized block");
 	    #$loglevel ++;
@@ -526,6 +533,10 @@ C<BuddyAllocator::Block> instances are returned by the
 C<blockByNumber> and C<getBlock> methods. They hold a pointer into
 the file and provide a handful of useful methods.
 
+(There are also two other classes, C<WriteBlock> and C<StringBlock>,
+which might be returned instead. Think of this as an interface rather
+than as a concrete class.)
+
 =head2 $block->read(length, [format])
 
 Reads C<length> bytes from the block (advancing the read pointer
@@ -541,11 +552,24 @@ Returns the length (or size) of this block.
 Adjusts the read/write pointer within the block.
 
 =head2 $block->write(bytes)
+
 =head2 $block->write(format, items...)
 
 Writes data to the underlying file, at the position represented by this
 block. If multiple arguments are given, the first is a format string
 and the rest are the remaining arguments to C<pack>.
+
+=head2 $block->close([ zerofill ])
+
+This is generally a no-op, but if called on a writable block with
+C<zerofill = true>, then zeroes will be written from the current
+location to the end of the allocated block.
+
+=head2 $block->copyback( )
+
+Returns the block's contents as a string. For write blocks, this
+reads from the file. This is just here for debugging purposes and
+might change.
 
 =cut
 
