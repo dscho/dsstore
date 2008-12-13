@@ -156,7 +156,8 @@ C<00 01 00 00>.
 
 =item C<'fwsw'>
 
-C<long>, directories and files. Unknown.
+C<long>, directories and files. Finder window sidebar width, in
+pixels/points. Zero if collapsed.
 
 =item C<'fwvh'>
 
@@ -194,6 +195,11 @@ a 4CC indicating the "keep arranged by" setting
 (or C<none> for none or C<grid> for align to grid);
 another 4CC, either C<botm> or C<rght>,  indicating the label position I<w.r.t.> the icon;
 and then 12 unknown bytes (flags?).
+
+Of the flag bytes, the low-order bit of the second byte is 1 if "Show
+item info" is checked, and the low-order bit of the 12th (last) byte
+is 1 if the "Show icon preview" checkbox is checked. The tenth byte
+usually has the value 4, and the remainder are zero.
 
 =item C<'icvt'>
 
