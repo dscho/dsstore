@@ -25,7 +25,7 @@ C<writeMetaData> must be called for the changes to be reflected in the file.
 use Carp;
 use strict;
 
-our($VERSION) = '0.90';
+our($VERSION) = '0.91';
 
 # Debug logging. Uncomment these and all uses of them to activate.
 # It might be nice to make this more easily switchable.

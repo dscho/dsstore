@@ -5,9 +5,17 @@ read, created from scratch, or some simple manipulations are possible.
 For more information on the format of the files, see the notes
 in the accompanying POD file, installed as Mac::Finder::DSStore::Format.
 
-The interfaces provided by this module right now are not very convenient
-and require some knowledge of the file format to use. I expect to add
-some more high-level / convenient functions in the future.
+There are some examples in the examples/ directory:
+
+   examples/dumprecs.pl
+     A minimal example of reading the DSDB records and printing them to stdout.
+
+   examples/circle.pl
+     Demonstrates creating a DS_Store file from scratch.
+
+   examples/dsstore_dump.pl
+     Attempts to dump a store file's records in a more human-readable format
+     (specifically, as a perl script which will recreate the store file).
 
 INSTALLATION
 
