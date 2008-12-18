@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-use Test::More tests => 3;
+use Test::More tests => 4;
+use Test::NoWarnings;
 use Mac::Finder::DSStore::BuddyAllocator;
 use IO::File;
 

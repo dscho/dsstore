@@ -19,6 +19,7 @@ L<Mac::Finder::DSStore::BuddyAllocator::Block>.
 =cut
 
 use strict;
+use warnings;
 use POSIX qw(ceil);
 use Carp qw(croak);
 use Fcntl;
@@ -359,6 +360,8 @@ one of a few concrete types, according to the record type.
 
 =cut
 
+use strict;
+use warnings;
 use Encode ();
 use Carp qw(croak);
 

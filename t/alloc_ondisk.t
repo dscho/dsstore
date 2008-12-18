@@ -1,7 +1,8 @@
 #!/usr/bin/perl -w
 
 use File::Temp qw( tempfile );
-use Test::More tests => 35;
+use Test::NoWarnings;
+use Test::More tests => 36;
 use Mac::Finder::DSStore::BuddyAllocator;
 use IO::File;
 

@@ -22,8 +22,9 @@ C<writeMetaData> must be called for the changes to be reflected in the file.
 
 =cut
 
-use Carp;
 use strict;
+use warnings;
+use Carp;
 
 our($VERSION) = '0.91';
 
@@ -573,8 +574,9 @@ might change.
 
 =cut
 
-use Carp;
 use strict;
+use warnings;
+use Carp;
 
 #
 # Block objects are created by the buddy allocator; they're a
@@ -638,8 +640,9 @@ sub copyback {
 
 package Mac::Finder::DSStore::BuddyAllocator::WriteBlock;
 
-use Carp;
 use strict;
+use warnings;
+use Carp;
 
 #
 # Write blocks
@@ -725,6 +728,9 @@ sub copyback {
 }
 
 package Mac::Finder::DSStore::BuddyAllocator::StringBlock;
+
+use strict;
+use warnings;
 
 #
 # This one's kind of handy, really, but is only used for debugging and

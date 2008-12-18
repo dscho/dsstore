@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-use Test::Simple tests => 60;
+use Test::Simple tests => 61;
+use Test::NoWarnings;
 
 use Mac::Finder::DSStore::BuddyAllocator;
 use Data::Dumper;  # For stringifying state

@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-use Test::More tests => 9;
+use Test::More tests => 10;
+use Test::NoWarnings;
 use Mac::Finder::DSStore qw( makeEntries );
 
 #
