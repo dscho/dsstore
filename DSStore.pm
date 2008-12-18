@@ -20,11 +20,13 @@ L<Mac::Finder::DSStore::BuddyAllocator::Block>.
 
 use strict;
 use POSIX qw(ceil);
+use Carp qw(croak);
+use Fcntl;
 use Exporter qw(import);
 
 our($VERSION) = '0.90';
 our($testpoint);
-our(@EXPORT_OK) = qw( getDSDBEntries putDSDBEntries );
+our(@EXPORT_OK) = qw( getDSDBEntries putDSDBEntries writeDSDBEntries );
 
 =head2 @records = &Mac::Finder::DSStore::getDSDBEntries($store[, $callback])
 
@@ -264,6 +266,45 @@ sub writeBTreeNode {
         my($x) = [ &readBTreeNode($into->copyback) ];
         $testpoint->( [ $values, $pointers], $x );
     }
+}
+
+=head2 &Mac::Finder::DSStore::writeDSDBEntries($file, @entries)
+
+A convenience function which sorts a list of entries and writes them
+to the specified file using C<putDSDBEntries>, then flushes the allocator's
+data structures to disk. 
+C<$file> may be a filename or an open file handle.
+The store object is returned, but you don't need to do anything else with it.
+
+=cut
+
+sub writeDSDBEntries {
+    my($store, $recs);
+    {
+        my($file, @entries) = @_;
+
+        require IO::File;
+        require Mac::Finder::DSStore::BuddyAllocator;
+        
+        unless(ref $file) {
+            my($filename) = $file;
+            $file = IO::File->new( $filename, Fcntl::O_RDWR | Fcntl::O_CREAT );
+            croak "$filename: $!, died" unless $file;
+        }
+
+        if((stat($file))[7] > 32) {
+            $store = Mac::Finder::DSStore::BuddyAllocator->open($file);
+        } else {
+            $store = Mac::Finder::DSStore::BuddyAllocator->new($file);
+        }
+
+        $recs = [ sort { $a->cmp($b) } @entries ];
+    }
+
+    putDSDBEntries($store, $recs);
+    $store->writeMetaData;
+
+    $store;
 }
 
 package Mac::Finder::DSStore::Entry;

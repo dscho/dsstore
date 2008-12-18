@@ -5,3 +5,8 @@ DSStore.pm			Main module
 DSStoreFormat.pod		In-depth file format notes
 MANIFEST			This list of files
 META.yml			Machine-readable package information
+t/alloc_incore.t
+t/alloc_ondisk.t
+t/alloc_r.t
+t/recs_rw.t
+t/store1
