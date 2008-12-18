@@ -17,3 +17,11 @@ This uses the standard(?) Build.PL method:
   ./Build
   ./Build install
 
+You'll need Module::Build installed. Alternately, just copy the .pm files
+into the appropriate places in your include path.
+
+HACKING
+
+There is a Mercurial repository for this module at
+    http://freehg.org/u/wiml/dsstore/
+
