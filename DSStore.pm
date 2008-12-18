@@ -26,7 +26,7 @@ use Exporter qw(import);
 
 our($VERSION) = '0.90';
 our($testpoint);
-our(@EXPORT_OK) = qw( getDSDBEntries putDSDBEntries writeDSDBEntries );
+our(@EXPORT_OK) = qw( getDSDBEntries putDSDBEntries writeDSDBEntries makeEntries );
 
 =head2 @records = &Mac::Finder::DSStore::getDSDBEntries($store[, $callback])
 
@@ -307,6 +307,47 @@ sub writeDSDBEntries {
     $store;
 }
 
+=head2 &Mac::Finder::DSStore::makeEntries($filename, [ what => value ... ])
+
+C<makeEntries> encapsulates some information about the format of individual
+records in the DS_Store file. It returns a list of records constructed with the
+given filename and with the information specified in the rest of its args.
+Most args come in pairs, a name and a value, so C<makeEntries> kind of looks
+like it takes a hash. Some names take no value and some could take several.
+Some produce more than one record as a result.
+
+See the output of the F<examples/dsstore_dump.pl> script for an example of how
+to use this, and check the source code for a list of the formats it accepts.
+
+This function might change in the future.
+
+=cut
+
+sub makeEntries {
+    my($filename, @info) = @_;
+    my(@results);
+    
+    while(@info) {
+        my($recordType) = shift @info;
+        
+        if ($recordType =~ /^....$/) {
+            my($record) = Mac::Finder::DSStore::Entry->new($filename, $recordType);
+            $record->value( shift @info );
+            push(@results, $record);
+        } elsif ($recordType =~ /^(....)_hex$/) {
+            my($record) = Mac::Finder::DSStore::Entry->new($filename, $1);
+            $record->value( pack('H*', shift @info) );
+            push(@results, $record);            
+        } else {
+            my($mkr) = $Mac::Finder::DSStore::Entry::{'make_'.$recordType};
+            croak "Don't know how to handle '$recordType'" unless $mkr;
+            push(@results, &{$mkr}($filename, $recordType, \@info));
+        }
+    }
+    
+    @results;    
+}
+
 package Mac::Finder::DSStore::Entry;
 
 =head1 Mac::Finder::DSStore::Entry
@@ -518,6 +559,114 @@ sub cmp {
     ( $self->[1] cmp $other->[1] );
 }
 
+#
+#  The make_foo subs are used by Mac::Finder::DSStore::makeEntries.
+#
+
+sub make_BKGD_default {
+    my($filename, undef, undef) = @_;
+
+    my($rec) = Mac::Finder::DSStore::Entry->new($filename, 'BKGD');
+    $rec->value( pack('A4 x8', 'DefB') );
+    $rec;
+}
+
+sub make_BKGD_color {
+    my($filename, $strucId, $argv) = @_;
+    my($color) = shift @$argv;
+    my($rgb);
+
+    if ($color =~ /^\#([0-9a-f]+)$/i) {
+        if(length($1) == 3) {
+            ( $rgb = $1 ) =~ s/(.)(.)(.)/$1$1$1$1$2$2$2$2$3$3$3$3/;
+        } elsif (length($1) == 6) {
+            ( $rgb = $1 ) =~ s/(..)(..)(..)/$1$1$2$2$3$3/;
+        } elsif (length($1) == 12) {
+            $rgb = $1;
+        }
+    }
+
+    croak "Can't parse color string '$color'"
+        unless $rgb;
+
+    my($rec) = Mac::Finder::DSStore::Entry->new($filename, 'BKGD');
+    $rec->value( pack('A4 H12 x2', 'ClrB', $rgb) );
+
+    $rec;
+}
+
+sub make_BKGD_alias {
+    my($filename, $strucId, $argv) = @_;
+
+    my($image) = shift @$argv;
+
+    require Mac::Memory;
+
+    if(!ref $image) {
+        require Mac::Files;
+        $image = Mac::Files::NewAlias($image);
+    }
+
+    my($isize) = $image->size;
+    my($bkgd, $pict);
+
+    $bkgd = Mac::Finder::DSStore::Entry->new($filename, 'BKGD');
+    $bkgd->value( pack('A4 N nn', 'PctB', $isize, 0, 0) );
+
+    $pict = Mac::Finder::DSStore::Entry->new($filename, 'pict');
+    $pict->value( $image->get );
+
+    ( $bkgd, $pict );
+}
+
+sub _make_packed {
+    my($filename, $strucId, $fmt, @values) = @_;
+    my($record) = Mac::Finder::DSStore::Entry->new($filename, $strucId);
+    $record->value( pack($fmt, @values) );
+    $record;
+}
+
+sub _make_packed_arrayref {
+    my($filename, $strucId, $argv, $format, $reqcount, $dflt) = @_;
+    my($values) = shift @$argv;
+
+    croak "$strucId argument must be an array ref"
+        unless ref $values;
+
+    croak "$strucId argument must have at least $reqcount items"
+        unless $reqcount <= @$values;
+
+    my($max) = $reqcount + @$dflt;
+
+    croak "$strucId argument can't have more than $max items"
+        if $max < @$values;
+
+    my(@fields) = @$values;
+    if ($max > @fields) {
+        push(@fields, @{$dflt}[ ( @fields - $max ) .. -1 ]);
+    }
+
+    return &_make_packed($filename, substr($strucId, 0, 4),
+                         $format, @fields);
+}
+
+sub make_Iloc_xy {
+    my($filename, $strucId, $argv) = @_;
+    return &_make_packed_arrayref($filename, $strucId, $argv,
+                                  'NN nnnn', 2, [65535, 65535, 65535, 0]);
+}
+
+sub make_fwi0_flds {
+    my($filename, $strucId, $argv) = @_;
+    my($flds) = shift @$argv;
+    
+    croak "$strucId argument must have 7 values"
+        unless 7 == @$flds;
+
+    return &_make_packed($filename, 'fwi0', 'n4 A4 n*', @$flds);
+}
+    
+
 =head1 SEE ALSO
 
 See L<Mac::Finder::DSStore::Format> for more detailed information on
@@ -525,6 +674,12 @@ the record types found in a DS_Store file.
 
 See L<Mac::Finder::DSStore::BuddyAllocator> for the low-level organization
 of the DS_Store file.
+
+=head1 AUTHOR
+
+Copyright 2008 by Wim Lewis E<lt>wiml@hhhh.orgE<gt>.
+
+Some information is from Mark Mentovai via the Mozilla project.
 
 =cut
 

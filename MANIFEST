@@ -8,5 +8,9 @@ META.yml			Machine-readable package information
 t/alloc_incore.t
 t/alloc_ondisk.t
 t/alloc_r.t
+t/recs_make.t
 t/recs_rw.t
 t/store1
+examples/circle.pl
+examples/dsstore_dump.pl
+examples/dumprecs.pl
