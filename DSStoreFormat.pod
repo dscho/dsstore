@@ -82,15 +82,21 @@ by 2*count bytes of data in UTF-16.
 
 A given structure id/type always seems to have the same type of data
 associated with it, and any structure id appears at most once per
-filename. Some only appear on files, and some only appear on the
-containing directory (filename F<.>).
+filename. Some only appear on files, and some only appear on
+directories (including the filename F<.>).
+
+Information about a directory (its Finder window view settings, for
+example) is usually held in its parent directory's store file, unless
+the directory is at the root of its volume, in which case it's held
+in the directory itself with the filename F<.>.
+
 I've encountered the following record types:
 
 =over
 
 =item C<'BKGD'>
 
-12-byte C<blob>, F<.> only. Indicates the background of the
+12-byte C<blob>, directories only. Indicates the background of the
 Finder window viewing this directory (in icon mode). The format
 depends on the kind of background:
 
@@ -98,7 +104,7 @@ depends on the kind of background:
 
 =item Default background
 
-FourCharcode C<DefB>, followed by eight unknown bytes, probably garbage.
+FourCharCode C<DefB>, followed by eight unknown bytes, probably garbage.
 
 =item Solid color
 
@@ -114,12 +120,12 @@ The C<'pict'> record points to the actual background image.
 
 =item C<'ICVO'>
 
-C<bool>, F<.> only. Unknown meaning. Always seems to be 1, so
+C<bool>, directories only. Unknown meaning. Always seems to be 1, so
 presumably 0 is the default value.
 
 =item C<'Iloc'>
 
-16-byte C<blob>, attached to files. 
+16-byte C<blob>, attached to files and directories. 
 The file's icon location. Two 4-byte values representing the
 horizontal and vertical positions of the icon's center (not
 top-left). (Then, 6 bytes 0xff and 2 bytes 0?) For the purposes of the
@@ -128,7 +134,7 @@ size comes from the icvo blob.
 
 =item C<'LSVO'>
 
-C<bool>, attached to directories and files. Purpose unknown.
+C<bool>, attached to directories. Purpose unknown.
 
 =item C<'cmmt'>
 
@@ -136,17 +142,19 @@ C<ustr>, containing a file's "Spotlight Comments".
 
 =item C<'dilc'>
 
-32-byte C<blob>, attached to files. Unknown, may indicate the icon
-location when files are displayed on the desktop.
+32-byte C<blob>, attached to files and directories.
+Unknown, may indicate the icon location
+when files are displayed on the desktop.
 
 =item C<'dscl'>
 
-C<bool>, attached to subdirectories. Indicates whether the
+C<bool>, attached to subdirectories. Indicates that the
 subdirectory is open (disclosed) in list view.
 
 =item C<'fwi0'>
 
-16-byte C<blob>, directories and files. Finder window information.
+16-byte C<blob>, directories only.
+Finder window information.
 The data is first four two-byte values representing the top, left,
 bottom, and right edges of the rect defining the content area of the
 window. The next four bytes represent the view of the window: C<icnv>
@@ -156,11 +164,12 @@ C<00 01 00 00>.
 
 =item C<'fwsw'>
 
-C<long>, directories and files. Unknown.
+C<long>, directories only. Finder window sidebar width, in
+pixels/points. Zero if collapsed.
 
 =item C<'fwvh'>
 
-C<shor>, directories and files.
+C<shor>, directories only.
 Finder window vertical height. If present, it overrides the height
 defined by the rect in fwi0. The Finder seems to create these (at
 least on 10.4) even though it will do the right thing for window
@@ -169,18 +178,18 @@ height is weird when accounting for toolbars and status bars.
 
 =item C<'icgo'>
 
-8-byte C<blob>, directories and files.
+8-byte C<blob>, directories (and files?).
 Unknown. Probably two integers, and often the value C<00 00 00 00 00
 00 00 04>.
 
 =item C<'icsp'>
 
-8-byte C<blob>, directories and files.
+8-byte C<blob>, directories only.
 Unknown, usually all zeroes if present.
 
 =item C<'icvo'>
 
-18- or 26-byte C<blob>, F<.> only.
+18- or 26-byte C<blob>, directories only.
 Icon view options. There seem to be two formats for this blob.
 
 If the first 4 bytes are "icvo", then 8 unknown bytes (flags?), then 2 bytes
@@ -195,9 +204,14 @@ a 4CC indicating the "keep arranged by" setting
 another 4CC, either C<botm> or C<rght>,  indicating the label position I<w.r.t.> the icon;
 and then 12 unknown bytes (flags?).
 
+Of the flag bytes, the low-order bit of the second byte is 1 if "Show
+item info" is checked, and the low-order bit of the 12th (last) byte
+is 1 if the "Show icon preview" checkbox is checked. The tenth byte
+usually has the value 4, and the remainder are zero.
+
 =item C<'icvt'>
 
-C<shor>, F<.> only.
+C<shor>, directories only.
 Icon view text label (filename) size, in points.
 
 =item C<'info'>
@@ -207,23 +221,23 @@ Unknown.
 
 =item C<'lssp'>
 
-8-byte C<blob>, directories and files.
+8-byte C<blob>, directories only.
 Unknown. Possibly the scroll position in list view mode?
 
 =item C<'lsvo'>
 
-76-byte C<blob>, directories and files.
+76-byte C<blob>, directories only.
 List view options. Seems to contain the columns displayed in list
 view, their widths, and their sort ordering if any.
 
 =item C<'lsvt'>
 
-C<shor>, directories and files.
+C<shor>, directories only.
 List view text (filename) size, in points.
 
 =item C<'pict'>
 
-Variable-length C<blob>, F<.> only.
+Variable-length C<blob>, directories only.
 Despite the name, this contains not a PICT image but an Alias record
 (see I<Inside Macintosh: Files>) which resolves to the file containing
 the actual background image. See also C<'BKGD'>.
@@ -396,7 +410,7 @@ size of the referenced blocks is implied by which freelist the block
 is in; a free block in freelist N is 2^N bytes long.
 
 Although the header block is not explicitly allocated, the allocator
-behaves as if it is; other blocks are split in order to accomodate it
+behaves as if it is; other blocks are split in order to accommodate it
 in the buddy scheme, and its buddy block (at 0x20) is either on the
 freelist or allocated. (Usually it holds the B-tree's master block.)
 
@@ -410,6 +424,7 @@ Original reverse-engineering effort by Mark Mentovai,
 L<https://wiki.mozilla.org/DS_Store_File_Format>. Some of the text
 describing record types has been copied from that wiki page.
 
-Further investigation and documntation by Wim Lewis.
+Further investigation and documentation by Wim Lewis
+E<lt>wiml@hhhh.orgE<gt>.
 
 
