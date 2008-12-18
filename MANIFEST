@@ -8,6 +8,7 @@ META.yml			Machine-readable package information
 t/alloc_incore.t
 t/alloc_ondisk.t
 t/alloc_r.t
+t/pod.t
 t/recs_make.t
 t/recs_rw.t
 t/store1

@@ -351,8 +351,16 @@ sub blockByNumber {
     }
 }
 
+=head2 ( $offset, $size ) = $allocator->blockOffset(blockid)
+
+Retrieves the file offset and size in bytes of a given block.
+The offset doesn't include the 4-byte fudge.
+In scalar context, just returns the offset.
+
+=cut
+
 sub blockOffset {
-    my($self, $id, $write) = @_;
+    my($self, $id) = @_;
     my($addr) = $self->{offsets}->[$id];
     croak "Block $id is not allocated" unless $addr;
     my($offset) = $addr & ~0x1F;
