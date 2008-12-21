@@ -25,7 +25,7 @@ Module::Build->new
          'Mac::Memory' => 0
      },
      build_requires => {
-	'Test::More' => 0,
+	'Test::More' => '0.61',
 	'Test::NoWarnings' => 0
      },
 
