@@ -62,7 +62,7 @@ SKIP: {
     eval { require Mac::Memory; require Mac::Files; };
 
     if($@) {
-        note $@;
+        note($@);
         skip "Mac file aliases not available", 2;
     }
 
