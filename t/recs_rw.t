@@ -65,6 +65,7 @@ ok($inorder, 'Record ordering function');
 
 # Write it to a temporary file. This will invoke the testpoint once.
 my(undef, $filename) = tempfile();
+END { unlink($filename); }
 my($wrote) = Mac::Finder::DSStore::writeDSDBEntries($filename, @recs);
 ok($wrote && ref $wrote, '&writeDSDBEntries');
 $wrote->close;
