@@ -23,11 +23,13 @@ use warnings;
 use POSIX qw(ceil);
 use Carp qw(croak);
 use Fcntl;
-use Exporter qw(import);
+require Exporter;
 
-our($VERSION) = '0.91';
-our($testpoint);
+our($VERSION) = '0.92';
+our(@ISA) = qw(Exporter);
 our(@EXPORT_OK) = qw( getDSDBEntries putDSDBEntries writeDSDBEntries makeEntries );
+
+our($testpoint);
 
 =head2 @records = &Mac::Finder::DSStore::getDSDBEntries($store[, $callback])
 

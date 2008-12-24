@@ -4,6 +4,12 @@ use Test::More tests => 10;
 use Test::NoWarnings;
 use Mac::Finder::DSStore qw( makeEntries );
 
+# The note subr is a pretty recent addition to Test::More
+# (version 0.81_01 or so), so supply our own version if it's missing.
+unless(exists &note) {
+    eval 'sub note { print join("", "# ", @_, "\n"); }';
+}
+
 #
 # This is a small test of &makeEntries()
 #

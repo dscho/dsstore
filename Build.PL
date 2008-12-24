@@ -16,6 +16,19 @@ Module::Build->new
          },
      dist_version_from => 'DSStore.pm',
 
+     requires => {
+         perl => '5.6.1',
+         Encode => '1.20'
+     },
+     recommends => {
+         'Mac::Files' => 0,
+         'Mac::Memory' => 0
+     },
+     build_requires => {
+	'Test::More' => '0.61',
+	'Test::NoWarnings' => 0
+     },
+
      dynamic_config => 0
 
     )
