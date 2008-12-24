@@ -38,6 +38,11 @@ be invoked for each record, and C<getDSDBEntries> will return an empty list.
 
 =cut
 
+sub getBTreeRootblock {
+    my($store) = @_;
+    return $store->blockByNumber($store->{toc}->{DSDB})->read(20, 'N*');
+}
+
 sub getDSDBEntries {
     my($file, $callback) = @_;
 
@@ -45,7 +50,7 @@ sub getDSDBEntries {
 
     $callback = sub { push(@retval, $_[0]); } unless defined $callback;
 
-    my($rootnode, $height, $nrec, $nnodes, $blksize) = $file->blockByNumber($file->{toc}->{DSDB})->read(20, 'N5');
+    my($rootnode, $height, $nrec, $nnodes, $blksize) = &getBTreeRootblock($file);
     
     my($n) = &traverse_btree($file, $rootnode, $callback);
 
@@ -66,7 +71,6 @@ This function does not flush the allocator's information back to the file.
 
 =cut
 
-
 sub putDSDBEntries {
     my($file, $recs) = @_;
     
@@ -77,7 +81,7 @@ sub putDSDBEntries {
     if(defined($file->{toc}->{DSDB})) {
 	$tocblock = $file->{toc}->{DSDB};
 	my($old_rootblock);
-	($old_rootblock, $pagesize) = $file->blockByNumber($tocblock)->read(20, 'N x15 N');
+	($old_rootblock, $pagesize) = (&getBTreeRootblock($file))[0, 4];
 	&freeBTreeNode($file, $old_rootblock);
     } else {
 	$tocblock = $file->allocate( 20 );
@@ -205,13 +209,13 @@ sub traverse_btree {
 }
 
 sub freeBTreeNode {
-    my($nodeid, $allocator) = @_;
+    my($allocator, $nodeid) = @_;
     my($block) = $allocator->blockByNumber( $nodeid );
     
     if($block->read(4, 'N') != 0) {
 	$block->seek(0);
-	my($values, $pointers) = &readBTreeNode($block);
-	&freeBTreeNode($_, $allocator) foreach @$pointers;
+	my(undef, $pointers) = &readBTreeNode($block);
+	&freeBTreeNode($allocator, $_) foreach @$pointers;
     }
 
     $allocator->free($nodeid);
