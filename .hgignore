@@ -1,0 +1,8 @@
+syntax: regexp
+#
+_build
+blib
+Build
+META.yml
+cover_db
+Mac-Finder-DSStore-[\.\d_]+
