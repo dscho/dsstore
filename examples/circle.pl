@@ -31,7 +31,7 @@ foreach $i (1 .. $num) {
 
     my($e);
     $e = Mac::Finder::DSStore::Entry->new("file$i", 'Iloc');
-    $e->set(pack('NNnnnn', $x, $y, 65536, 65536, 65536, 65536, 0));
+    $e->value(pack('NNnnnn', $x, $y, 65536, 65536, 65536, 65536, 0));
     push(@ents, $e);
 }
 
