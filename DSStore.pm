@@ -394,6 +394,7 @@ our(%types) = (
                'LSVO' => 'bool',
                'lsvt' => 'shor',
                'pict' => 'blob',
+               'vstl' => 'type',
                );
 
 =head2 $entry = ...::Entry->new($filename, $typecode)
