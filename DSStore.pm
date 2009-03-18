@@ -414,7 +414,7 @@ what aspect of the file the entry describes.
 
 Gets or sets the value of an entry.
 
-If the concrete type is C<blob>, the value is interpreted as a byte string; 
+If the concrete type is C<blob> or C<type>, the value is interpreted as a byte string; 
 if it is C<ustr>, as a character string.
 If the concrete type is C<long>, C<shor>, or C<bool>, then the value should
 be an integer.
@@ -451,6 +451,11 @@ sub value {
         $self->[3] = '' . $value;
     } elsif ($t eq 'bool' or $t eq 'shor' or $t eq 'long') {
         $self->[3] = 0 + $value;
+    } elsif ($t eq 'type') {
+        $value = '' . $value;
+        croak "'type' values must be exactly four bytes long"
+            unless length($value) == 4;
+        $self->[3] = $value;
     } else {
         die "Unknown concrete type $t, died";
     }
@@ -477,6 +482,8 @@ sub readEntry {
     } elsif ($strucType eq 'ustr') {
 	my($strlen) = $block->read(4, 'N');
 	$value = Encode::decode('UTF-16BE', $block->read(2 * $strlen));
+    } elsif ($strucType eq 'type') {
+        $value = $block->read(4);
     } else {
 	die "Unknown struc type '$strucType', died";
     }
@@ -504,7 +511,7 @@ sub byteSize {
     $size = length($filename) * 2 + 12;
     # 12 bytes: 4 each for filename length, struct id, and struct type
 
-    if ($strucType eq 'long' or $strucType eq 'shor') {
+    if ($strucType eq 'long' or $strucType eq 'shor' or $strucType eq 'type') {
 	$size += 4;
     } elsif ($strucType eq 'bool') {
 	$size += 1;
@@ -539,6 +546,8 @@ sub write {
     } elsif ($strucType eq 'ustr') {
 	$into->write('N', length($self->[3]));
 	$into->write(Encode::encode('UTF-16BE', $self->[3]));
+    } elsif ($strucType eq 'type') {
+        $into->write('a4', $self->[3]);
     } else {
 	die "Unknown struc type '$strucType', died";
     }

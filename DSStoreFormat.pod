@@ -71,6 +71,10 @@ A boolean value, stored as one byte.
 An arbitrary block of bytes, stored as an integer followed by that
 many bytes of data.
 
+=item C<'type'>
+
+Four bytes, containing a FourCharCode.
+
 =item C<'ustr'>
 
 A Unicode text string, stored as an integer character count followed 
@@ -427,4 +431,4 @@ describing record types has been copied from that wiki page.
 Further investigation and documentation by Wim Lewis
 E<lt>wiml@hhhh.orgE<gt>.
 
-
+Also thanks to Yvan BARTHE<Eacute>LEMY for investigation and bugfixes.
