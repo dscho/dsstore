@@ -140,6 +140,13 @@ size comes from the icvo blob.
 
 C<bool>, attached to directories. Purpose unknown.
 
+=item C<'bwsp'>
+
+A C<blob> containing a binary plist. This contains the size
+and layout of the window (including whether optional parts like
+the sidebar or path bar are visible).
+This appeared in Snow Leopard (10.6).
+
 =item C<'cmmt'>
 
 C<ustr>, containing a file's "Spotlight Comments".
@@ -167,7 +174,9 @@ The next four bytes are unknown, and are either zeroes or
 C<00 01 00 00>.
 
 On Leopard (10.5), the view-type information seems to be ignored,
-but see C<vstl>.
+but see C<vstl>. On Snow Leopard (10.6), some more of this record's
+function seems to have been taken over by the plist records C<bwsp>
+and C<lsvp>.
 
 =item C<'fwsw'>
 
@@ -192,7 +201,7 @@ Unknown. Probably two integers, and often the value C<00 00 00 00 00
 =item C<'icsp'>
 
 8-byte C<blob>, directories only.
-Unknown, usually all zeroes if present.
+Unknown, usually all but the last two bytes are zeroes.
 
 =item C<'icvo'>
 
@@ -242,6 +251,13 @@ view, their widths, and their sort ordering if any.
 C<shor>, directories only.
 List view text (filename) size, in points.
 
+=item C<'lsvp'>
+
+A C<blob> containing a binary plist. List view settings, perhaps
+supplanting the C<'lsvo'> record. Appeared in Snow Leopard (10.6).
+These list view settings are shared between list view and the list
+portion of coverflow view.
+
 =item C<'pict'>
 
 Variable-length C<blob>, directories only.
@@ -252,7 +268,8 @@ the actual background image. See also C<'BKGD'>.
 =item C<'vstl'>
 
 C<type>, directories only. Indicates the style of the view
-(one of C<icnv>, C<clmv>, C<Nlsv>, or C<Flwv>)
+(one of C<icnv>, C<clmv>, C<Nlsv>, or C<Flwv>,
+indicating respectively: icon view, column/browser view, list view, and coverflow view)
 selected by the Finder's "Always open in icon [or other style] view"
 checkbox.
 This appears to be a new addition to the Leopard (10.5) Finder.
