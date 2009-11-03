@@ -31,5 +31,11 @@ into the appropriate places in your include path.
 HACKING
 
 There is a Mercurial repository for this module at
-    http://freehg.org/u/wiml/dsstore/
+    http://www.hhhh.org/src/hg/dsstore/
 
+There is an older repository at FreeHg:
+    http://freehg.org/u/wiml/dsstore/
+but FreeHg has been down a lot, so its copy is probably out of date.
+
+
+    Wim Lewis / wiml@hhhh.org
