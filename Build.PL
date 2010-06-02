@@ -29,6 +29,7 @@ Module::Build->new
 	'Test::NoWarnings' => 0
      },
 
+     sign => 1,
      dynamic_config => 0
 
     )
