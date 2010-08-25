@@ -47,6 +47,8 @@ operations.
 sub open {
     my($class, $fh) = @_;
 
+    binmode($fh);
+
     # read the file header: 32 bytes, plus a mysterious extra
     # four bytes at the front
     my($fheader);
@@ -117,6 +119,8 @@ can be used to create a new file from scratch.
 
 sub new {
     my($cls, $fh) = @_;
+
+    binmode($fh) if defined($fh);
 
     my($self) = {
 	fh => $fh,
