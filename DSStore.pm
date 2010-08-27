@@ -25,7 +25,7 @@ use Carp qw(croak);
 use Fcntl;
 require Exporter;
 
-our($VERSION) = '0.93';
+our($VERSION) = '0.95';
 our(@ISA) = qw(Exporter);
 our(@EXPORT_OK) = qw( getDSDBEntries putDSDBEntries writeDSDBEntries makeEntries );
 
