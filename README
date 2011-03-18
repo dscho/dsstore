@@ -33,9 +33,6 @@ HACKING
 There is a Mercurial repository for this module at
     http://www.hhhh.org/src/hg/dsstore/
 
-There is an older repository at FreeHg:
-    http://freehg.org/u/wiml/dsstore/
-but FreeHg has been down a lot, so its copy is probably out of date.
-
+Feel free to contribute comments or patches via email.
 
     Wim Lewis / wiml@hhhh.org
