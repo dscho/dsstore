@@ -96,17 +96,23 @@ sub putDSDBEntries {
     $height = 0;
 
     my(@children);
-
+    
+    # Partition the records into btree nodes, from the bottom of
+    # the tree working towards the root.
     do {
 	my(@sizes);
 
 	if (@children) {
+            # Interior node: child pointers interleaved with records
 	    @sizes = map { 4 + $_->byteSize } @$recs;
 	} else {
+            # Leaf node: just a bunch of records
 	    @sizes = map { $_->byteSize } @$recs;
 	}
 
-	my(@interleaf) = &partition_sizes($pagesize - 4, @sizes);
+        # In addition to @sizes, each page contains a record
+        # count and a flag/childnode field (4 bytes each)
+	my(@interleaf) = &partition_sizes($pagesize - 8, @sizes);
 	my(@nchildren);
 
 	my($next) = 0;
@@ -146,6 +152,9 @@ sub putDSDBEntries {
     1;
 }
 
+# Given a list of sizes, break them into groups so that
+# each group sums to no more than $max, not including the items
+# that separate them (returned in @ejecta).
 sub partition_sizes {
     my($max, @sizes) = @_;
     my($sum) = 0;
