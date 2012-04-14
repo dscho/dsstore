@@ -628,9 +628,8 @@ sub make_BKGD_alias {
 
     my($image) = shift @$argv;
 
-    require Mac::Memory;
-
     if(!ref $image) {
+        require Mac::Memory;
         require Mac::Files;
         $image = Mac::Files::NewAlias($image);
     }
