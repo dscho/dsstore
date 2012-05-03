@@ -25,7 +25,7 @@ use Carp qw(croak);
 use Fcntl;
 require Exporter;
 
-our($VERSION) = '0.95';
+our($VERSION) = '0.96';
 our(@ISA) = qw(Exporter);
 our(@EXPORT_OK) = qw( getDSDBEntries putDSDBEntries writeDSDBEntries makeEntries );
 
@@ -707,6 +707,7 @@ of the DS_Store file.
 Copyright 2008 by Wim Lewis E<lt>wiml@hhhh.orgE<gt>.
 
 Some information is from Mark Mentovai via the Mozilla project.
+Thanks also to Martin Baker for bug reports.
 
 =cut
 
